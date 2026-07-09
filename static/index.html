@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Doc FAQ — Document Assistant</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark">§</span>
+      <div>
+        <h1>Doc FAQ</h1>
+        <p class="brand-sub">answers only from your files</p>
+      </div>
+    </div>
+
+    <div class="upload-info">
+      <p class="upload-hint-title">📁 Documents Auto-Loaded</p>
+      <p class="upload-hint-text">Place files in the <code>/upload</code> folder and restart the server</p>
+      <p class="upload-hint-formats">PDF · DOCX · TXT · XLSX</p>
+    </div>
+
+    <div class="doc-list-header">
+      <span>Indexed documents</span>
+      <span id="doc-count" class="doc-count">0</span>
+    </div>
+
+    <ul id="doc-list" class="doc-list">
+      <li class="doc-empty" id="doc-empty">No documents loaded. Place files in /upload folder.</li>
+    </ul>
+  </aside>
+
+  <!-- Chat area -->
+  <main class="chat-area">
+    <header class="chat-header">
+      <h2>Chat</h2>
+      <p id="chat-subtitle">Ask questions about your documents.</p>
+    </header>
+
+    <div id="messages" class="messages">
+      <div class="msg msg-system">
+        <div class="msg-bubble">
+          I answer using documents from the /upload folder. Ask me anything about the loaded documents.
+        </div>
+      </div>
+    </div>
+
+    <form id="chat-form" class="chat-input-row">
+      <input
+        id="chat-input"
+        type="text"
+        placeholder="Ask a question about your documents…"
+        autocomplete="off"
+      >
+      <button type="submit" id="send-btn">Send</button>
+    </form>
+  </main>
+
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="script.js"></script>
+</body>
+</html>
