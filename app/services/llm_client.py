@@ -18,18 +18,22 @@ _MODEL_NAME = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 _client: Groq | None = None
 
 
+class LLMConfigurationError(RuntimeError):
+    """Raised when the LLM client is misconfigured (missing API key)."""
+
+
 def _get_client() -> Groq:
     global _client
     if _client is None:
         api_key = os.environ.get("GROQ_API_KEY")
         if not api_key:
-            raise RuntimeError(
+            raise LLMConfigurationError(
                 "GROQ_API_KEY environment variable is not set. "
                 "Set it before starting the server, e.g.\n"
                 "  export GROQ_API_KEY=your_key_here   (macOS/Linux)\n"
                 "  set GROQ_API_KEY=your_key_here      (Windows CMD)\n"
                 "  $env:GROQ_API_KEY='your_key_here'   (Windows PowerShell)\n"
-                "Or create a .env file in the project root."
+                "Or configure the Render Environment Variables for your service."
             )
         _client = Groq(api_key=api_key)
     return _client

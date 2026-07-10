@@ -14,7 +14,7 @@ from app.models.schemas import ChatRequest, ChatResponse, SourceSnippet
 from app.services.memory_store import MemoryStore, get_memory_store
 from app.services.search import MemoryRetriever, Retriever
 from app.services.prompt_builder import NO_ANSWER_MESSAGE, build_messages, parse_answer_and_questions
-from app.services.llm_client import generate_answer
+from app.services.llm_client import generate_answer, LLMConfigurationError
 from app.services.product_utils import (
     ProductIntent,
     detect_product_intent,
@@ -173,6 +173,18 @@ async def chat(
     try:
         raw_answer = generate_answer(system_prompt, user_prompt)
         answer, suggested_questions = parse_answer_and_questions(raw_answer)
+    except LLMConfigurationError as exc:
+        # Friendly chat response so the UI shows a helpful hint instead of a 500 page.
+        logger.error("LLM configuration error: %s", exc)
+        return ChatResponse(
+            answer=(
+                "Server misconfiguration: GROQ_API_KEY is not set. "
+                "Set the `GROQ_API_KEY` environment variable in your Render service."
+            ),
+            sources=[],
+            found_context=False,
+            suggested_questions=[],
+        )
     except RuntimeError as exc:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
