@@ -152,18 +152,31 @@ async def chat(
 
     product_filter, allow_multi_product, overview_mode = _retrieval_params(intent, request.question)
 
-    # If the client requested direct LLM mode, bypass the retrieval pipeline
-    # and ask the model directly. We still provide a short list of available
-    # filenames to the model so it can be aware of uploaded context at a high
-    # level, but we do not pass full document sections here.
+    # If the client requested direct LLM mode, retrieve the top sections just
+    # like the normal pipeline but send them directly to the model. This makes
+    # the model answer based on uploaded document context while still keeping
+    # the UX a single-step LLM response.
     if getattr(request, "use_direct_llm", False):
-        filenames = ", ".join(d.filename for d in store.all_documents())
-        system_prompt = (
-            "You are a helpful assistant that answers questions using the uploaded "
-            "documents when possible. Available documents: "
-            f"{filenames}.\n\nAnswer the user's question concisely and do not invent facts."
+        document_filenames = request.document_filenames or None
+        sections = retriever.retrieve(
+            request.question,
+            top_k=request.top_k,
+            product_filter=product_filter,
+            document_filenames=document_filenames,
+            allow_multi_product=allow_multi_product,
+            overview_mode=overview_mode,
         )
-        user_prompt = request.question
+
+        if not sections:
+            return ChatResponse(
+                answer=NO_ANSWER_MESSAGE,
+                sources=[],
+                found_context=False,
+                suggested_questions=[],
+            )
+
+        system_prompt, user_prompt = build_messages(request.question, sections, intent)
+
         try:
             raw_answer = generate_answer(system_prompt, user_prompt)
             answer, suggested_questions = parse_answer_and_questions(raw_answer)
@@ -182,8 +195,8 @@ async def chat(
             logger.error("LLM request too large: %s", exc)
             return ChatResponse(
                 answer=(
-                    "Your question is too long for the current model. "
-                    "Try asking a shorter question or use the retrieval mode."
+                    "Your question is too long or the retrieved document context is too large for the current model. "
+                    "Try asking a shorter question or upload fewer documents."
                 ),
                 sources=[],
                 found_context=False,
@@ -195,8 +208,8 @@ async def chat(
 
         return ChatResponse(
             answer=answer,
-            sources=[],
-            found_context=False,
+            sources=_unique_sources(sections),
+            found_context=True,
             suggested_questions=suggested_questions,
         )
 
