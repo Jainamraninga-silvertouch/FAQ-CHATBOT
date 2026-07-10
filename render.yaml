@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: faq-chatbot
+    env: python
+    plan: free
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    workingDirectory: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+        sync: false
+      - key: STORAGE_PATH
+        value: /disk/storage
+        sync: false

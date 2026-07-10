@@ -7,6 +7,7 @@ so the chatbot retains its data across server restarts.
 from __future__ import annotations
 
 import json
+import os
 import threading
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -18,7 +19,10 @@ class MemoryStore:
     """Thread-safe file-backed store keyed by document_id."""
 
     def __init__(self, storage_dir: str | Path | None = None) -> None:
-        self._storage_dir = Path(storage_dir or Path(__file__).resolve().parent.parent.parent / "storage")
+        # Allow overriding storage location from env var for cloud mounts (e.g. Render disk)
+        env_path = os.environ.get("STORAGE_PATH")
+        default_path = Path(__file__).resolve().parent.parent.parent / "storage"
+        self._storage_dir = Path(storage_dir or env_path or default_path)
         self._storage_dir.mkdir(parents=True, exist_ok=True)
         self._documents: Dict[str, Document] = {}
         self._lock = threading.Lock()
