@@ -26,6 +26,7 @@ from app.services.product_utils import (
 )
 import json
 from fastapi.responses import StreamingResponse
+import asyncio
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["chat"])
@@ -470,6 +471,29 @@ async def chat_stream(
 
     # Add a small debug log so we can trace streaming on the server side.
     logger.info("Starting streaming response for question: %s", request.question)
+    return StreamingResponse(
+        gen(),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.get("/stream-test")
+async def stream_test():
+    """Simple streaming test endpoint that yields fixed NDJSON chunks with a delay.
+    Use this to verify browser streaming and client JS handling without calling the LLM.
+    """
+    async def gen():
+        parts = [
+            {"delta": "This is a streaming test. "},
+            {"delta": "If you see this in the console, streaming works. "},
+            {"delta": "Finalizing test output."},
+        ]
+        for p in parts:
+            yield json.dumps(p) + "\n"
+            await asyncio.sleep(0.08)
+        yield json.dumps({"done": True, "sources": [], "used_direct_llm": False}) + "\n"
+
     return StreamingResponse(
         gen(),
         media_type="application/x-ndjson",

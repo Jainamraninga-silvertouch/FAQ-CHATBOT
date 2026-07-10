@@ -18,6 +18,47 @@ init();
 async function init() {
   await refreshDocuments();
   chatForm.addEventListener("submit", handleSend);
+  const testBtn = document.getElementById('stream-test-btn');
+  if (testBtn) testBtn.addEventListener('click', runStreamTest);
+}
+
+async function runStreamTest() {
+  console.info('Starting /stream-test');
+  try {
+    const res = await fetch(`${API_BASE}/stream-test`, { method: 'GET' });
+    if (!res.ok) {
+      console.error('/stream-test returned', res.status);
+      return;
+    }
+    if (!res.body || !res.body.getReader) {
+      console.warn('Streaming not available in this environment for /stream-test');
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let nl;
+      while ((nl = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, nl).trim();
+        buffer = buffer.slice(nl + 1);
+        if (!line) continue;
+        try {
+          const obj = JSON.parse(line);
+          console.log('stream-test line:', obj);
+        } catch (e) {
+          console.error('Failed to parse stream-test line', e, line);
+        }
+      }
+    }
+    console.info('/stream-test finished');
+  } catch (e) {
+    console.error('stream-test error', e);
+  }
 }
 
 // ---------------- Documents ----------------
