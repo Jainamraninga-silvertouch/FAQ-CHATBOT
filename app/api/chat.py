@@ -347,7 +347,11 @@ async def chat_stream(
         async def empty_gen():
             yield json.dumps({"done": True, "error": "No documents uploaded"}) + "\n"
 
-        return StreamingResponse(empty_gen(), media_type="application/x-ndjson")
+        return StreamingResponse(
+            empty_gen(),
+            media_type="application/x-ndjson",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     conversational_reply = get_conversational_reply(request.question)
     if conversational_reply is not None:
@@ -355,7 +359,11 @@ async def chat_stream(
             yield json.dumps({"delta": conversational_reply}) + "\n"
             yield json.dumps({"done": True, "sources": [], "used_direct_llm": False}) + "\n"
 
-        return StreamingResponse(conv_gen(), media_type="application/x-ndjson")
+        return StreamingResponse(
+            conv_gen(),
+            media_type="application/x-ndjson",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     intent = detect_product_intent(request.question)
     if intent == ProductIntent.UNKNOWN:
@@ -363,7 +371,11 @@ async def chat_stream(
             yield json.dumps({"delta": _clarification_response()}) + "\n"
             yield json.dumps({"done": True, "sources": [], "used_direct_llm": False}) + "\n"
 
-        return StreamingResponse(clar_gen(), media_type="application/x-ndjson")
+        return StreamingResponse(
+            clar_gen(),
+            media_type="application/x-ndjson",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     direct_answer = _negative_scope_response(request.question, intent)
     if direct_answer is not None:
@@ -371,7 +383,11 @@ async def chat_stream(
             yield json.dumps({"delta": direct_answer}) + "\n"
             yield json.dumps({"done": True, "sources": [], "used_direct_llm": False}) + "\n"
 
-        return StreamingResponse(neg_gen(), media_type="application/x-ndjson")
+        return StreamingResponse(
+            neg_gen(),
+            media_type="application/x-ndjson",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     product_filter, allow_multi_product, overview_mode = _retrieval_params(intent, request.question)
 
@@ -412,12 +428,20 @@ async def chat_stream(
                     yield json.dumps({"delta": answer[i : i + chunk_size]}) + "\n"
                 yield json.dumps({"done": True, "sources": [], "used_direct_llm": True}) + "\n"
 
-            return StreamingResponse(fallback_gen(), media_type="application/x-ndjson")
+            return StreamingResponse(
+                fallback_gen(),
+                media_type="application/x-ndjson",
+                headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+            )
         except Exception:
             async def fail_gen():
                 yield json.dumps({"done": True, "error": "LLM call failed"}) + "\n"
 
-            return StreamingResponse(fail_gen(), media_type="application/x-ndjson")
+            return StreamingResponse(
+                fail_gen(),
+                media_type="application/x-ndjson",
+                headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+            )
 
     # Build messages and call LLM (either direct mode or retrieval-based)
     system_prompt, user_prompt = build_messages(request.question, sections, intent)
@@ -429,7 +453,11 @@ async def chat_stream(
         async def err_gen():
             yield json.dumps({"done": True, "error": "LLM call failed"}) + "\n"
 
-        return StreamingResponse(err_gen(), media_type="application/x-ndjson")
+        return StreamingResponse(
+            err_gen(),
+            media_type="application/x-ndjson",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     sources = _unique_sources(sections) if sections else []
     used_direct_flag = bool(use_direct or not sections)
@@ -440,4 +468,10 @@ async def chat_stream(
             yield json.dumps({"delta": answer[i : i + chunk_size]}) + "\n"
         yield json.dumps({"done": True, "sources": [s.dict() for s in sources], "used_direct_llm": used_direct_flag}) + "\n"
 
-    return StreamingResponse(gen(), media_type="application/x-ndjson")
+    # Add a small debug log so we can trace streaming on the server side.
+    logger.info("Starting streaming response for question: %s", request.question)
+    return StreamingResponse(
+        gen(),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
