@@ -9,6 +9,7 @@ const chatInput = document.getElementById("chat-input");
 const sendBtn = document.getElementById("send-btn");
 const chatSubtitle = document.getElementById("chat-subtitle");
 const toast = document.getElementById("toast");
+const directLLM = document.getElementById("direct-llm");
 
 let documents = [];
 
@@ -53,6 +54,7 @@ function updateChatAvailability() {
   const hasDocs = documents.length > 0;
   chatInput.disabled = !hasDocs;
   sendBtn.disabled = !hasDocs;
+  if (directLLM) directLLM.disabled = !hasDocs;
   chatSubtitle.textContent = hasDocs
     ? `Ask questions about ${documents.length} loaded document${documents.length === 1 ? "" : "s"}.`
     : "No documents loaded. Place files in /upload folder and restart server.";
@@ -73,10 +75,13 @@ async function handleSend(e) {
   const loadingEl = addMessage("assistant", "Thinking…", { loading: true });
 
   try {
+    const payload = { question, top_k: 5 };
+    if (directLLM && directLLM.checked) payload.use_direct_llm = true;
+
     const res = await fetch(`${API_BASE}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, top_k: 5 }),
+      body: JSON.stringify(payload),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "Chat request failed");

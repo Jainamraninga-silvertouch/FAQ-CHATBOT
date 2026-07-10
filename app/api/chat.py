@@ -152,6 +152,54 @@ async def chat(
 
     product_filter, allow_multi_product, overview_mode = _retrieval_params(intent, request.question)
 
+    # If the client requested direct LLM mode, bypass the retrieval pipeline
+    # and ask the model directly. We still provide a short list of available
+    # filenames to the model so it can be aware of uploaded context at a high
+    # level, but we do not pass full document sections here.
+    if getattr(request, "use_direct_llm", False):
+        filenames = ", ".join(d.filename for d in store.all_documents())
+        system_prompt = (
+            "You are a helpful assistant that answers questions using the uploaded "
+            "documents when possible. Available documents: "
+            f"{filenames}.\n\nAnswer the user's question concisely and do not invent facts."
+        )
+        user_prompt = request.question
+        try:
+            raw_answer = generate_answer(system_prompt, user_prompt)
+            answer, suggested_questions = parse_answer_and_questions(raw_answer)
+        except LLMConfigurationError as exc:
+            logger.error("LLM configuration error: %s", exc)
+            return ChatResponse(
+                answer=(
+                    "Server misconfiguration: GROQ_API_KEY is not set. "
+                    "Set the `GROQ_API_KEY` environment variable in your Render service."
+                ),
+                sources=[],
+                found_context=False,
+                suggested_questions=[],
+            )
+        except LLMRequestTooLargeError as exc:
+            logger.error("LLM request too large: %s", exc)
+            return ChatResponse(
+                answer=(
+                    "Your question is too long for the current model. "
+                    "Try asking a shorter question or use the retrieval mode."
+                ),
+                sources=[],
+                found_context=False,
+                suggested_questions=[],
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("LLM call failed during direct-llm chat")
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, "The language model call failed.") from exc
+
+        return ChatResponse(
+            answer=answer,
+            sources=[],
+            found_context=False,
+            suggested_questions=suggested_questions,
+        )
+
     document_filenames = request.document_filenames or None
     sections = retriever.retrieve(
         request.question,

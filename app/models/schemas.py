@@ -59,6 +59,10 @@ class ChatRequest(BaseModel):
         description="Optional list of filenames to restrict the search to."
     )
 
+    # When true, bypass the normal retrieval path and ask the LLM directly.
+    # This mode will not return source snippets (the model answers directly).
+    use_direct_llm: bool = Field(False, description="Ask the LLM directly without retrieval")
+
 
 class SourceSnippet(BaseModel):
     """A retrieved section shown back to the user for transparency."""
