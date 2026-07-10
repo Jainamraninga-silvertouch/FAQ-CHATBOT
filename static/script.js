@@ -72,29 +72,77 @@ async function handleSend(e) {
   chatInput.disabled = true;
   sendBtn.disabled = true;
 
-  const loadingEl = addMessage("assistant", "Thinking…", { loading: true });
+  const loadingEl = addMessage("assistant", "", { loading: true });
 
   try {
     const payload = { question, top_k: 5 };
     if (directLLM && directLLM.checked) payload.use_direct_llm = true;
 
-    const res = await fetch(`${API_BASE}/chat`, {
+    const res = await fetch(`${API_BASE}/chat/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Chat request failed");
 
-    loadingEl.remove();
-    addMessage("assistant", data.answer, {
-      noContext: !data.found_context,
-      sources: data.sources,
-      suggestedQuestions: data.suggested_questions || []
-    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(err || "Chat request failed");
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let completeSources = [];
+    let usedDirect = false;
+
+    // Update bubble text incrementally
+    let currentText = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let nl;
+      while ((nl = buffer.indexOf("\n")) !== -1) {
+        const line = buffer.slice(0, nl).trim();
+        buffer = buffer.slice(nl + 1);
+        if (!line) continue;
+        try {
+          const obj = JSON.parse(line);
+          if (obj.delta) {
+            currentText += obj.delta;
+            // update the loading element's bubble
+            const bubble = loadingEl.querySelector('.msg-bubble');
+            bubble.textContent = currentText;
+            messages.scrollTop = messages.scrollHeight;
+          }
+          if (obj.done) {
+            completeSources = obj.sources || [];
+            usedDirect = !!obj.used_direct_llm;
+          }
+        } catch (e) {
+          console.error('Failed to parse stream line', e, line);
+        }
+      }
+    }
+
+    // Replace loading indicator with final message (already rendered)
+    // Append sources if present
+    if (completeSources.length > 0) {
+      const bubble = loadingEl.querySelector('.msg-bubble');
+      const src = document.createElement('div');
+      src.className = 'sources';
+      src.innerHTML = 'Sources: ' + completeSources
+        .map(s => `<span class="source-tag">${escapeHtml(s.filename)} — ${escapeHtml(s.section)}</span>`)
+        .join('');
+      bubble.appendChild(src);
+    }
+
   } catch (err) {
-    loadingEl.remove();
-    addMessage("assistant", `Error: ${err.message}`, { noContext: true });
+    const bubble = loadingEl.querySelector('.msg-bubble');
+    bubble.textContent = `Error: ${err.message}`;
+    loadingEl.classList.add('no-context');
   } finally {
     chatInput.disabled = false;
     sendBtn.disabled = false;

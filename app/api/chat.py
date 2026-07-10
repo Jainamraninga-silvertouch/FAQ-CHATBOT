@@ -24,6 +24,8 @@ from app.services.product_utils import (
     detect_product_intent,
     is_multi_product_question,
 )
+import json
+from fastapi.responses import StreamingResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["chat"])
@@ -329,3 +331,113 @@ async def chat(
         found_context=True,
         suggested_questions=suggested_questions,
     )
+
+
+@router.post("/chat/stream")
+async def chat_stream(
+    request: ChatRequest,
+    store: MemoryStore = Depends(get_memory_store),
+    retriever: Retriever = Depends(get_retriever),
+):
+    """Stream the LLM answer as NDJSON lines. Each line is a JSON object:
+    - {"delta": "partial text"}
+    - final: {"done": true, "sources": [...], "used_direct_llm": bool}
+    """
+    if store.is_empty():
+        async def empty_gen():
+            yield json.dumps({"done": True, "error": "No documents uploaded"}) + "\n"
+
+        return StreamingResponse(empty_gen(), media_type="application/x-ndjson")
+
+    conversational_reply = get_conversational_reply(request.question)
+    if conversational_reply is not None:
+        async def conv_gen():
+            yield json.dumps({"delta": conversational_reply}) + "\n"
+            yield json.dumps({"done": True, "sources": [], "used_direct_llm": False}) + "\n"
+
+        return StreamingResponse(conv_gen(), media_type="application/x-ndjson")
+
+    intent = detect_product_intent(request.question)
+    if intent == ProductIntent.UNKNOWN:
+        async def clar_gen():
+            yield json.dumps({"delta": _clarification_response()}) + "\n"
+            yield json.dumps({"done": True, "sources": [], "used_direct_llm": False}) + "\n"
+
+        return StreamingResponse(clar_gen(), media_type="application/x-ndjson")
+
+    direct_answer = _negative_scope_response(request.question, intent)
+    if direct_answer is not None:
+        async def neg_gen():
+            yield json.dumps({"delta": direct_answer}) + "\n"
+            yield json.dumps({"done": True, "sources": [], "used_direct_llm": False}) + "\n"
+
+        return StreamingResponse(neg_gen(), media_type="application/x-ndjson")
+
+    product_filter, allow_multi_product, overview_mode = _retrieval_params(intent, request.question)
+
+    # For streaming, reuse the same logic as /chat but stream the resulting
+    # answer in small chunks (NDJSON) so the client can render progressively.
+    use_direct = getattr(request, "use_direct_llm", False)
+
+    document_filenames = request.document_filenames or None
+    sections = retriever.retrieve(
+        request.question,
+        top_k=request.top_k,
+        product_filter=product_filter,
+        document_filenames=document_filenames,
+        allow_multi_product=allow_multi_product,
+        overview_mode=overview_mode,
+    )
+
+    # If no sections found and not direct mode, fall back to LLM as earlier
+    if not sections and not use_direct:
+        # call LLM fallback (synchronous) and stream its result
+        try:
+            filenames = ", ".join(d.filename for d in store.all_documents())
+            system_prompt = (
+                "You are a professional pharmaceutical FAQ assistant. "
+                "Use the uploaded documents to answer the question. "
+                "If the user's wording appears misspelled or ambiguous, silently "
+                "infer the likely intent and answer based on the documents; do not "
+                "mention typos or ask the user to rephrase. Be concise and accurate."
+            )
+            system_prompt += ("\n\nAvailable documents: " f"{filenames}.")
+            user_prompt = request.question
+            raw_answer = generate_answer(system_prompt, user_prompt)
+            answer, suggested_questions = parse_answer_and_questions(raw_answer)
+            # stream the answer as NDJSON chunks
+            async def fallback_gen():
+                chunk_size = 120
+                for i in range(0, len(answer), chunk_size):
+                    yield json.dumps({"delta": answer[i : i + chunk_size]}) + "\n"
+                yield json.dumps({"done": True, "sources": [], "used_direct_llm": True}) + "\n"
+
+            return StreamingResponse(fallback_gen(), media_type="application/x-ndjson")
+        except Exception:
+            async def fail_gen():
+                yield json.dumps({"done": True, "error": "LLM call failed"}) + "\n"
+
+            return StreamingResponse(fail_gen(), media_type="application/x-ndjson")
+
+    # Build messages and call LLM (either direct mode or retrieval-based)
+    system_prompt, user_prompt = build_messages(request.question, sections, intent)
+
+    try:
+        raw_answer = generate_answer(system_prompt, user_prompt)
+        answer, suggested_questions = parse_answer_and_questions(raw_answer)
+    except Exception:
+        async def err_gen():
+            yield json.dumps({"done": True, "error": "LLM call failed"}) + "\n"
+
+        return StreamingResponse(err_gen(), media_type="application/x-ndjson")
+
+    sources = _unique_sources(sections) if sections else []
+    used_direct_flag = bool(use_direct or not sections)
+
+    async def gen():
+        chunk_size = 120
+        for i in range(0, len(answer), chunk_size):
+            yield json.dumps({"delta": answer[i : i + chunk_size]}) + "\n"
+        yield json.dumps({"done": True, "sources": [s.dict() for s in sources], "used_direct_llm": used_direct_flag}) + "\n"
+
+    return StreamingResponse(gen(), media_type="application/x-ndjson")
