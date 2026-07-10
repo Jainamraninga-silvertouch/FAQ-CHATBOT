@@ -89,10 +89,12 @@ async function handleSend(e) {
       throw new Error(err || "Chat request failed");
     }
 
+    console.debug("/chat/stream response headers:", [...res.headers.entries()]);
     // Some browsers/environments (or intermediaries) may not expose a streaming
     // response body. In that case, fall back to a standard JSON response from
     // the non-streaming `/chat` endpoint so the UI still works.
     if (!res.body || !res.body.getReader) {
+      console.warn("Streaming not available in this environment; falling back to /chat JSON response");
       try {
         const data = await fetch(`${API_BASE}/chat`, {
           method: "POST",
@@ -133,6 +135,7 @@ async function handleSend(e) {
         if (!line) continue;
         try {
           const obj = JSON.parse(line);
+          console.debug('stream line parsed', obj);
           if (obj.delta) {
             currentText += obj.delta;
             // update the loading element's bubble
