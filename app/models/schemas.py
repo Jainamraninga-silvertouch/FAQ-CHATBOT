@@ -54,6 +54,10 @@ class DeleteResponse(BaseModel):
 class ChatRequest(BaseModel):
     question: str = Field(..., min_length=1, description="User's question")
     top_k: int = Field(3, ge=1, le=10, description="Number of sections to retrieve")
+    document_filenames: list[str] = Field(
+        default_factory=list,
+        description="Optional list of filenames to restrict the search to."
+    )
 
 
 class SourceSnippet(BaseModel):

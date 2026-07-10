@@ -33,7 +33,6 @@ _CONVERSATIONAL_PATTERNS = {
     "hello": "Hello! I can help answer questions about the uploaded FAQ documents.",
     "hey": "Hello! I can help answer questions about the uploaded FAQ documents.",
     "how are you": "I'm doing well and ready to help with your questions.",
-    "what is this": "This is a FAQ assistant that answers questions using the uploaded documentation.",
     "who are you": "I am a FAQ assistant that helps answer questions from the uploaded documentation.",
 }
 
@@ -52,9 +51,6 @@ def get_conversational_reply(question: str) -> str | None:
 
     if normalized.startswith("how are you"):
         return _CONVERSATIONAL_PATTERNS["how are you"]
-
-    if normalized in ("what is this", "what is this?", "what's this", "what's this?"):
-        return _CONVERSATIONAL_PATTERNS["what is this"]
 
     if normalized in ("who are you", "who are you?"):
         return _CONVERSATIONAL_PATTERNS["who are you"]
@@ -156,10 +152,12 @@ async def chat(
 
     product_filter, allow_multi_product, overview_mode = _retrieval_params(intent, request.question)
 
+    document_filenames = request.document_filenames or None
     sections = retriever.retrieve(
         request.question,
         top_k=request.top_k,
         product_filter=product_filter,
+        document_filenames=document_filenames,
         allow_multi_product=allow_multi_product,
         overview_mode=overview_mode,
     )

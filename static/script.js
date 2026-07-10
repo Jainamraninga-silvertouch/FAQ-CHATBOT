@@ -53,6 +53,8 @@ function updateChatAvailability() {
   const hasDocs = documents.length > 0;
   chatInput.disabled = !hasDocs;
   sendBtn.disabled = !hasDocs;
+  docSelectAll.disabled = !hasDocs;
+  docClearSelection.disabled = !hasDocs;
   chatSubtitle.textContent = hasDocs
     ? `Ask questions about ${documents.length} loaded document${documents.length === 1 ? "" : "s"}.`
     : "No documents loaded. Place files in /upload folder and restart server.";

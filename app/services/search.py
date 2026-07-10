@@ -123,6 +123,7 @@ class MemoryRetriever(Retriever):
         query: str,
         top_k: int = 3,
         product_filter: Optional[str] = None,
+        document_filenames: Optional[List[str]] = None,
         allow_multi_product: bool = True,
         overview_mode: bool = False,
     ) -> List[RetrievedSection]:
@@ -134,6 +135,9 @@ class MemoryRetriever(Retriever):
 
         for document in self._store.all_documents():
             if not is_searchable_document(document.filename):
+                continue
+
+            if document_filenames and document.filename not in document_filenames:
                 continue
 
             doc_product = get_product_from_filename(document.filename)
