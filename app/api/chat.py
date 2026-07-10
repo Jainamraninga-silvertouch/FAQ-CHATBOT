@@ -227,11 +227,60 @@ async def chat(
     )
 
     if not sections:
+        # No retrieval results — attempt a graceful fallback to the LLM so
+        # the assistant can help with typos or re-interpret the question.
+        try:
+            filenames = ", ".join(d.filename for d in store.all_documents())
+            system_prompt = (
+                "You are a helpful assistant. The user asked a question but the "
+                "retrieval system returned no matching document sections (possibly due to typos).")
+            system_prompt += (
+                " Use the uploaded documents where possible. Available documents: "
+                f"{filenames}.\n\nIf you can infer the user's intent despite misspellings, answer concisely."
+            )
+            user_prompt = request.question
+            raw_answer = generate_answer(system_prompt, user_prompt)
+            answer, suggested_questions = parse_answer_and_questions(raw_answer)
+        except LLMConfigurationError as exc:
+            logger.error("LLM configuration error during fallback: %s", exc)
+            return ChatResponse(
+                answer=(
+                    "Server misconfiguration: GROQ_API_KEY is not set. "
+                    "Set the `GROQ_API_KEY` environment variable in your Render service."
+                ),
+                sources=[],
+                found_context=False,
+                suggested_questions=[],
+                used_direct_llm=True,
+            )
+        except LLMRequestTooLargeError as exc:
+            logger.error("LLM request too large during fallback: %s", exc)
+            return ChatResponse(
+                answer=(
+                    "Your question is too long for the current model. "
+                    "Try asking a shorter question or use the retrieval mode."
+                ),
+                sources=[],
+                found_context=False,
+                suggested_questions=[],
+                used_direct_llm=True,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("LLM fallback failed during chat")
+            return ChatResponse(
+                answer=NO_ANSWER_MESSAGE,
+                sources=[],
+                found_context=False,
+                suggested_questions=[],
+                used_direct_llm=True,
+            )
+
         return ChatResponse(
-            answer=NO_ANSWER_MESSAGE,
+            answer=answer,
             sources=[],
             found_context=False,
-            suggested_questions=[],
+            suggested_questions=suggested_questions,
+            used_direct_llm=True,
         )
 
     system_prompt, user_prompt = build_messages(request.question, sections, intent)
