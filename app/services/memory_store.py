@@ -1,8 +1,8 @@
 """
 Persistent document store.
 
-This keeps uploaded FAQ documents on disk under the project's storage folder,
-so the chatbot retains its data across server restarts.
+Stores document JSON files under the project `storage/` or the path
+specified by the `STORAGE_PATH` environment variable.
 """
 from __future__ import annotations
 
@@ -24,8 +24,11 @@ class MemoryStore:
         default_path = Path(__file__).resolve().parent.parent.parent / "storage"
         self._storage_dir = Path(storage_dir or env_path or default_path)
         self._storage_dir.mkdir(parents=True, exist_ok=True)
+
         self._documents: Dict[str, Document] = {}
         self._lock = threading.Lock()
+
+        # Load existing local files into memory
         self._load_from_disk()
 
     def _storage_path(self, document_id: str) -> Path:
@@ -45,7 +48,8 @@ class MemoryStore:
 
     def _save_to_disk(self, document: Document) -> None:
         payload = document.model_dump()
-        self._storage_path(document.document_id).write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        path = self._storage_path(document.document_id)
+        path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     def _delete_from_disk(self, document_id: str) -> None:
         path = self._storage_path(document_id)

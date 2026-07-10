@@ -14,6 +14,4 @@ services:
       - key: GROQ_MODEL
         value: llama-3.3-70b-versatile
         sync: false
-      - key: STORAGE_PATH
-        value: /disk/storage
-        sync: false
+      # STORAGE_PATH removed; leave unset for ephemeral storage on free tier.

@@ -9,3 +9,4 @@ pandas==2.2.3
 rank-bm25==0.2.2
 groq==0.13.1
 python-dotenv==1.0.1
+# boto3 removed; S3 support disabled. Add boto3 if you enable S3.
