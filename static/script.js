@@ -196,8 +196,12 @@ async function handleSend(e) {
 
     // Replace loading indicator with final message (already rendered)
     // Append sources if present
+    const bubble = loadingEl.querySelector('.msg-bubble');
+    // Ensure final text is present
+    bubble.textContent = currentText || bubble.textContent || "(no response)";
+
+    // Append sources if present
     if (completeSources.length > 0) {
-      const bubble = loadingEl.querySelector('.msg-bubble');
       const src = document.createElement('div');
       src.className = 'sources';
       src.innerHTML = 'Sources: ' + completeSources
@@ -205,6 +209,9 @@ async function handleSend(e) {
         .join('');
       bubble.appendChild(src);
     }
+
+    // Remove loading state so styles update and the bubble is interactive
+    loadingEl.classList.remove('msg-loading');
 
   } catch (err) {
     const bubble = loadingEl.querySelector('.msg-bubble');
