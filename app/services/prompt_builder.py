@@ -48,14 +48,43 @@ def _intent_instruction(intent: ProductIntent) -> str:
     return ""
 
 
+_MAX_CONTEXT_CHARS = 12000
+_MAX_SECTION_CHARS = 2800
+
+
+def _truncate_text(text: str, max_chars: int) -> str:
+    if len(text) <= max_chars:
+        return text
+    truncated = text[:max_chars].rstrip()
+    if not truncated.endswith("."):
+        truncated = truncated.rsplit(" ", 1)[0].rstrip()
+    return f"{truncated} ..."
+
+
 def build_context_block(sections: List[RetrievedSection]) -> str:
     """Render retrieved sections into a plain-text reference block."""
     if not sections:
         return ""
-    blocks = []
+
+    truncated_sections: list[str] = []
     for s in sections:
-        blocks.append(f"[{s.filename} — {s.section}]\n{s.text}")
-    return "\n\n---\n\n".join(blocks)
+        truncated_sections.append(_truncate_text(s.text, _MAX_SECTION_CHARS))
+
+    # If the context is still too large, shrink each section evenly.
+    context_block = "\n\n---\n\n".join(
+        f"[{s.filename} — {s.section}]\n{truncated_text}"
+        for s, truncated_text in zip(sections, truncated_sections)
+    )
+
+    if len(context_block) > _MAX_CONTEXT_CHARS:
+        per_section_chars = max(800, _MAX_CONTEXT_CHARS // len(sections) - 200)
+        truncated_sections = [_truncate_text(s.text, per_section_chars) for s in sections]
+        context_block = "\n\n---\n\n".join(
+            f"[{s.filename} — {s.section}]\n{truncated_text}"
+            for s, truncated_text in zip(sections, truncated_sections)
+        )
+
+    return context_block
 
 
 def build_messages(

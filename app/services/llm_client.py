@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import os
 
-from groq import Groq
+from groq import APIStatusError, Groq
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +20,10 @@ _client: Groq | None = None
 
 class LLMConfigurationError(RuntimeError):
     """Raised when the LLM client is misconfigured (missing API key)."""
+
+
+class LLMRequestTooLargeError(RuntimeError):
+    """Raised when the request exceeds the model's token limits."""
 
 
 def _get_client() -> Groq:
@@ -53,6 +57,16 @@ def generate_answer(system_prompt: str, user_prompt: str) -> str:
             max_tokens=1024,
         )
         return response.choices[0].message.content.strip()
+    except APIStatusError as exc:
+        message = str(exc)
+        if "Request too large" in message or "tokens per minute" in message or "rate_limit_exceeded" in message:
+            logger.error("LLM request too large: %s", message)
+            raise LLMRequestTooLargeError(
+                "The request is too large for the current model. "
+                "Try a shorter question or reduce the document context."
+            ) from exc
+        logger.exception("LLM call failed")
+        raise
     except Exception:
         logger.exception("LLM call failed")
         raise

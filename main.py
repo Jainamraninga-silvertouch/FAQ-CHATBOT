@@ -59,11 +59,20 @@ async def startup_event():
 
     if documents:
         store = get_memory_store()
+        added = 0
+        skipped = 0
         for doc in documents:
+            if store.find_by_filename(doc.filename) is not None:
+                skipped += 1
+                logger.info("Skipping already-loaded document: %s", doc.filename)
+                continue
             store.add(doc)
-        logger.info(f"✓ Loaded {len(documents)} document(s) into persistent storage")
+            added += 1
+        logger.info("✓ Loaded %d new document(s) into persistent storage", added)
+        if skipped:
+            logger.info("✓ Skipped %d already-loaded document(s)", skipped)
         logger.info("Documents:")
-        for doc in documents:
+        for doc in store.all_documents():
             logger.info(f"  - {doc.filename} ({len(doc.content)} sections)")
     else:
         logger.warning("⚠ No documents found in /upload directory")

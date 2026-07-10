@@ -43,6 +43,12 @@ async def upload_document(
             f"Could not extract text from '{file.filename}': {exc}",
         ) from exc
 
+    if store.find_by_filename(file.filename) is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"A document with the filename '{file.filename}' has already been uploaded.",
+        )
+
     document = build_document(filename=file.filename, raw_text=raw_text)
     store.add(document)
 

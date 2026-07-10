@@ -38,13 +38,23 @@ class MemoryStore:
         if not self._storage_dir.exists():
             return
 
-        for file_path in self._storage_dir.glob("*.json"):
+        documents_by_filename: dict[str, Document] = {}
+        for file_path in sorted(self._storage_dir.glob("*.json")):
             try:
                 data = json.loads(file_path.read_text(encoding="utf-8"))
                 document = Document(**data)
-                self._documents[document.document_id] = document
             except Exception:
                 continue
+
+            existing = documents_by_filename.get(document.filename)
+            if existing is None:
+                documents_by_filename[document.filename] = document
+                self._documents[document.document_id] = document
+            else:
+                try:
+                    file_path.unlink()
+                except Exception:
+                    pass
 
     def _save_to_disk(self, document: Document) -> None:
         payload = document.model_dump()
@@ -58,6 +68,12 @@ class MemoryStore:
 
     def add(self, document: Document) -> None:
         with self._lock:
+            existing = self.find_by_filename(document.filename)
+            if existing and existing.document_id != document.document_id:
+                # Replace duplicate filename entries by deleting the old document.
+                self._delete_from_disk(existing.document_id)
+                del self._documents[existing.document_id]
+
             self._documents[document.document_id] = document
             self._save_to_disk(document)
 
@@ -81,8 +97,15 @@ class MemoryStore:
                     filename=doc.filename,
                     num_sections=len(doc.content),
                 )
-                for doc in self._documents.values()
+                for doc in sorted(self._documents.values(), key=lambda doc: doc.filename)
             ]
+
+    def find_by_filename(self, filename: str) -> Document | None:
+        with self._lock:
+            for document in self._documents.values():
+                if document.filename == filename:
+                    return document
+            return None
 
     def all_documents(self) -> List[Document]:
         with self._lock:

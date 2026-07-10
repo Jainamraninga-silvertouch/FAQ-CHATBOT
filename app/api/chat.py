@@ -14,7 +14,11 @@ from app.models.schemas import ChatRequest, ChatResponse, SourceSnippet
 from app.services.memory_store import MemoryStore, get_memory_store
 from app.services.search import MemoryRetriever, Retriever
 from app.services.prompt_builder import NO_ANSWER_MESSAGE, build_messages, parse_answer_and_questions
-from app.services.llm_client import generate_answer, LLMConfigurationError
+from app.services.llm_client import (
+    LLMConfigurationError,
+    LLMRequestTooLargeError,
+    generate_answer,
+)
 from app.services.product_utils import (
     ProductIntent,
     detect_product_intent,
@@ -49,10 +53,10 @@ def get_conversational_reply(question: str) -> str | None:
     if normalized.startswith("how are you"):
         return _CONVERSATIONAL_PATTERNS["how are you"]
 
-    if normalized.startswith("what is this") or normalized.startswith("what's this"):
+    if normalized in ("what is this", "what is this?", "what's this", "what's this?"):
         return _CONVERSATIONAL_PATTERNS["what is this"]
 
-    if normalized.startswith("who are you"):
+    if normalized in ("who are you", "who are you?"):
         return _CONVERSATIONAL_PATTERNS["who are you"]
 
     return None
@@ -180,6 +184,17 @@ async def chat(
             answer=(
                 "Server misconfiguration: GROQ_API_KEY is not set. "
                 "Set the `GROQ_API_KEY` environment variable in your Render service."
+            ),
+            sources=[],
+            found_context=False,
+            suggested_questions=[],
+        )
+    except LLMRequestTooLargeError as exc:
+        logger.error("LLM request too large: %s", exc)
+        return ChatResponse(
+            answer=(
+                "Your question is too long or the retrieved document context is too large for the current model. "
+                "Try asking a shorter question or upload fewer documents."
             ),
             sources=[],
             found_context=False,
