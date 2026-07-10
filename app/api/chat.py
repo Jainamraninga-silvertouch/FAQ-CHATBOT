@@ -231,12 +231,18 @@ async def chat(
         # the assistant can help with typos or re-interpret the question.
         try:
             filenames = ", ".join(d.filename for d in store.all_documents())
+            # Instruct the model to silently infer intent if the user's wording
+            # contains typos — do NOT tell the user about spelling mistakes or
+            # ask them to rephrase. Answer concisely using the available docs.
             system_prompt = (
-                "You are a helpful assistant. The user asked a question but the "
-                "retrieval system returned no matching document sections (possibly due to typos).")
+                "You are a professional pharmaceutical FAQ assistant. "
+                "Use the uploaded documents to answer the question. "
+                "If the user's wording appears misspelled or ambiguous, silently "
+                "infer the likely intent and answer based on the documents; do not "
+                "mention typos or ask the user to rephrase. Be concise and accurate."
+            )
             system_prompt += (
-                " Use the uploaded documents where possible. Available documents: "
-                f"{filenames}.\n\nIf you can infer the user's intent despite misspellings, answer concisely."
+                "\n\nAvailable documents: " f"{filenames}."
             )
             user_prompt = request.question
             raw_answer = generate_answer(system_prompt, user_prompt)
