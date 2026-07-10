@@ -190,6 +190,7 @@ async def chat(
                 sources=[],
                 found_context=False,
                 suggested_questions=[],
+                used_direct_llm=True,
             )
         except LLMRequestTooLargeError as exc:
             logger.error("LLM request too large: %s", exc)
@@ -201,6 +202,7 @@ async def chat(
                 sources=[],
                 found_context=False,
                 suggested_questions=[],
+                used_direct_llm=True,
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception("LLM call failed during direct-llm chat")
@@ -211,6 +213,7 @@ async def chat(
             sources=_unique_sources(sections),
             found_context=True,
             suggested_questions=suggested_questions,
+            used_direct_llm=True,
         )
 
     document_filenames = request.document_filenames or None

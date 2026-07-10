@@ -77,3 +77,5 @@ class ChatResponse(BaseModel):
     sources: List[SourceSnippet] = []
     found_context: bool
     suggested_questions: List[str] = []
+    # Indicates whether the answer was produced by direct LLM mode
+    used_direct_llm: bool = False
