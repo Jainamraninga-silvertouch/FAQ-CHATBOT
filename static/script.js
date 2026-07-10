@@ -89,6 +89,29 @@ async function handleSend(e) {
       throw new Error(err || "Chat request failed");
     }
 
+    // Some browsers/environments (or intermediaries) may not expose a streaming
+    // response body. In that case, fall back to a standard JSON response from
+    // the non-streaming `/chat` endpoint so the UI still works.
+    if (!res.body || !res.body.getReader) {
+      try {
+        const data = await fetch(`${API_BASE}/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }).then(r => r.json());
+
+        loadingEl.remove();
+        addMessage("assistant", data.answer, {
+          noContext: !data.found_context,
+          sources: data.sources,
+          suggestedQuestions: data.suggested_questions || [],
+        });
+        return;
+      } catch (e) {
+        throw e;
+      }
+    }
+
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
