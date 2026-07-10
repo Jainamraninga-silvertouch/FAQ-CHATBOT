@@ -53,15 +53,15 @@ async def startup_event():
     logger.info("=" * 60)
     logger.info("Starting Document FAQ Chatbot")
     logger.info("=" * 60)
-    
-    # Load documents from upload directory
+
+    # Load documents from upload directory into the persistent store
     documents = load_all_documents()
-    
+
     if documents:
         store = get_memory_store()
         for doc in documents:
             store.add(doc)
-        logger.info(f"✓ Loaded {len(documents)} document(s) into memory")
+        logger.info(f"✓ Loaded {len(documents)} document(s) into persistent storage")
         logger.info("Documents:")
         for doc in documents:
             logger.info(f"  - {doc.filename} ({len(doc.content)} sections)")

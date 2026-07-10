@@ -1,60 +1,90 @@
 """
-In-memory document store.
+Persistent document store.
 
-This is Phase 1's "database". It is deliberately isolated behind a small
-class-based interface (get / add / delete / list / all_sections) so that
-swapping it for a real database or vector store later means writing a new
-class with the same methods — no changes needed in api/ or elsewhere.
+This keeps uploaded FAQ documents on disk under the project's storage folder,
+so the chatbot retains its data across server restarts.
 """
 from __future__ import annotations
 
+import json
 import threading
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from app.models.schemas import Document, DocumentSummary
 
 
 class MemoryStore:
-    """Thread-safe in-memory store keyed by document_id."""
+    """Thread-safe file-backed store keyed by document_id."""
 
-    def __init__(self) -> None:
+    def __init__(self, storage_dir: str | Path | None = None) -> None:
+        self._storage_dir = Path(storage_dir or Path(__file__).resolve().parent.parent.parent / "storage")
+        self._storage_dir.mkdir(parents=True, exist_ok=True)
         self._documents: Dict[str, Document] = {}
         self._lock = threading.Lock()
+        self._load_from_disk()
+
+    def _storage_path(self, document_id: str) -> Path:
+        return self._storage_dir / f"{document_id}.json"
+
+    def _load_from_disk(self) -> None:
+        if not self._storage_dir.exists():
+            return
+
+        for file_path in self._storage_dir.glob("*.json"):
+            try:
+                data = json.loads(file_path.read_text(encoding="utf-8"))
+                document = Document(**data)
+                self._documents[document.document_id] = document
+            except Exception:
+                continue
+
+    def _save_to_disk(self, document: Document) -> None:
+        payload = document.model_dump()
+        self._storage_path(document.document_id).write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    def _delete_from_disk(self, document_id: str) -> None:
+        path = self._storage_path(document_id)
+        if path.exists():
+            path.unlink()
 
     def add(self, document: Document) -> None:
         with self._lock:
             self._documents[document.document_id] = document
+            self._save_to_disk(document)
 
     def get(self, document_id: str) -> Optional[Document]:
-        return self._documents.get(document_id)
+        with self._lock:
+            return self._documents.get(document_id)
 
     def delete(self, document_id: str) -> bool:
         with self._lock:
             if document_id in self._documents:
                 del self._documents[document_id]
+                self._delete_from_disk(document_id)
                 return True
             return False
 
     def list_summaries(self) -> List[DocumentSummary]:
-        return [
-            DocumentSummary(
-                document_id=doc.document_id,
-                filename=doc.filename,
-                num_sections=len(doc.content),
-            )
-            for doc in self._documents.values()
-        ]
+        with self._lock:
+            return [
+                DocumentSummary(
+                    document_id=doc.document_id,
+                    filename=doc.filename,
+                    num_sections=len(doc.content),
+                )
+                for doc in self._documents.values()
+            ]
 
     def all_documents(self) -> List[Document]:
-        return list(self._documents.values())
+        with self._lock:
+            return list(self._documents.values())
 
     def is_empty(self) -> bool:
-        return len(self._documents) == 0
+        with self._lock:
+            return len(self._documents) == 0
 
 
-# Singleton instance used across the app. FastAPI's dependency injection
-# (see api/upload.py / api/chat.py) returns this same instance per request,
-# which is what keeps documents "in memory" for the life of the server process.
 memory_store = MemoryStore()
 
 

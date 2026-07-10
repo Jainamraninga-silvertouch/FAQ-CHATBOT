@@ -24,6 +24,39 @@ from app.services.product_utils import (
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["chat"])
 
+_CONVERSATIONAL_PATTERNS = {
+    "hi": "Hello! I can help answer questions about the uploaded FAQ documents.",
+    "hello": "Hello! I can help answer questions about the uploaded FAQ documents.",
+    "hey": "Hello! I can help answer questions about the uploaded FAQ documents.",
+    "how are you": "I'm doing well and ready to help with your questions.",
+    "what is this": "This is a FAQ assistant that answers questions using the uploaded documentation.",
+    "who are you": "I am a FAQ assistant that helps answer questions from the uploaded documentation.",
+}
+
+
+def get_conversational_reply(question: str) -> str | None:
+    """Return a friendly reply for simple conversational prompts."""
+    normalized = " ".join(question.lower().strip().split())
+    if not normalized:
+        return None
+
+    if normalized in _CONVERSATIONAL_PATTERNS:
+        return _CONVERSATIONAL_PATTERNS[normalized]
+
+    if normalized.startswith("hi ") or normalized.startswith("hello ") or normalized.startswith("hey "):
+        return _CONVERSATIONAL_PATTERNS["hi"]
+
+    if normalized.startswith("how are you"):
+        return _CONVERSATIONAL_PATTERNS["how are you"]
+
+    if normalized.startswith("what is this") or normalized.startswith("what's this"):
+        return _CONVERSATIONAL_PATTERNS["what is this"]
+
+    if normalized.startswith("who are you"):
+        return _CONVERSATIONAL_PATTERNS["who are you"]
+
+    return None
+
 
 def get_retriever(store: MemoryStore = Depends(get_memory_store)) -> Retriever:
     return MemoryRetriever(store)
@@ -87,6 +120,15 @@ async def chat(
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             "No documents have been uploaded yet. Upload a document before chatting.",
+        )
+
+    conversational_reply = get_conversational_reply(request.question)
+    if conversational_reply is not None:
+        return ChatResponse(
+            answer=conversational_reply,
+            sources=[],
+            found_context=False,
+            suggested_questions=[],
         )
 
     intent = detect_product_intent(request.question)
