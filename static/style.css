@@ -210,6 +210,7 @@ html, body {
   line-height: 1.55;
   font-size: 14px;
   white-space: pre-wrap;
+  min-height: 20px;
 }
 
 .msg-user .msg-bubble {
@@ -238,6 +239,35 @@ html, body {
 .msg-loading .msg-bubble {
   color: var(--slate);
   font-style: italic;
+}
+
+/* Make loading bubbles visible and add subtle animated dots so the UI
+   communicates progress instead of appearing as an empty square. The
+   pseudo-element is removed when JS removes the `msg-loading` class. */
+.msg-loading .msg-bubble::after {
+  content: "";
+  display: inline-block;
+  margin-left: 8px;
+  width: 28px;
+  height: 12px;
+  vertical-align: middle;
+  background: linear-gradient(90deg, rgba(0,0,0,0.08) 10%, rgba(0,0,0,0.18) 50%, rgba(0,0,0,0.08) 90%);
+  border-radius: 6px;
+  animation: loading-shimmer 1s linear infinite;
+}
+
+.msg-loading .msg-bubble {
+  min-height: 20px;
+  display: inline-block;
+  padding-left: 10px;
+  padding-right: 10px;
+  border-radius: 6px;
+}
+
+@keyframes loading-shimmer {
+  0% { transform: translateX(-4px); opacity: 0.6 }
+  50% { transform: translateX(4px); opacity: 1 }
+  100% { transform: translateX(-4px); opacity: 0.6 }
 }
 
 .sources {

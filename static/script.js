@@ -230,7 +230,9 @@ function addMessage(role, text, opts = {}) {
 
   const bubble = document.createElement("div");
   bubble.className = "msg-bubble";
-  bubble.textContent = text;
+  // For loading placeholders, insert a visible ellipsis so the bubble is
+  // clearly noticeable while streaming (avoids a tiny empty square).
+  bubble.textContent = opts.loading ? "…" : text;
   wrap.appendChild(bubble);
 
   if (opts.sources && opts.sources.length > 0) {
